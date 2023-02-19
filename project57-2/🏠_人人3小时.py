@@ -1,3 +1,4 @@
+import random
 import base64
 import time
 import uuid
@@ -388,9 +389,9 @@ if user_config_res:
                     vote_failed = 0
                     vote_success = 0
                     with st.spinner("正在执行投票..."):
-                        vote_list = [i for i in voteList_res["data"]["list"] if i["userOption"] is None][:3]
-                        if len(vote_list) < 3:
-                            vote_list = [i for i in voteList_res["data"]["list"] if i["userOption"]][:3]
+                        vote_list = [i for i in voteList_res["data"]["list"] if i["userOption"] is None][:1]
+                        if len(vote_list) < 1:
+                            vote_list = [i for i in voteList_res["data"]["list"] if i["userOption"]][:1]
                         for vote_dict in vote_list:
                             vote_id = vote_dict["voteId"]
                             vote_res = vote(voteId=vote_id)
@@ -401,7 +402,7 @@ if user_config_res:
                             else:
                                 vote_success += 1
                                 st.info(f"投票成功 {vote_success} 次！")
-                    if vote_success == 3:
+                    if vote_success == 1:
                         st.success("投票任务已完成！")
                 # ***** 益起猜 ***** #
                 headers["Host"] = "ef.3hours.taobao.com"
