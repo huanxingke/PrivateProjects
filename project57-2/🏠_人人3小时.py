@@ -10,6 +10,7 @@ import streamlit as st
 import requests
 
 from components.CookieManager import CookieManager, JSCookieManager
+from components.Webdav import JianGuoYunClient
 from utils.refreshPage import refreshPage
 
 
@@ -249,18 +250,23 @@ def getUser():
     return response
 
 
+# 页面基本配置
 st.set_page_config(page_title="人人3小时", page_icon="🏠")
 st.markdown("### 🏠 人人3小时一键执行")
 
+# 获取 cookie 管理器
 cm = CookieManager()
+# 获取用户配置
 user_config_res = cm.get("user_config")
 
-user_config = {}
-user_config_success = False
+# 初始化一些变量
 csr_uuid = None
+user_config = {}
 user_effective = False
+user_config_success = False
 
 if user_config_res:
+    # 存在本地配置
     if user_config_res.get("code") == 200:
         user_config = json.loads(base64.b64decode(user_config_res.get("value")).decode())
         p_csrf = user_config["p_csrf"]
@@ -282,17 +288,61 @@ if user_config_res:
                 if getUser_res["code"] != 200:
                     st.warning("用户身份失效，需要重新登录！")
                     JSCookieManager(key="user_config", delete=True)
-                    refreshPage()
+                    jgy = None
+                    with st.spinner("尝试连接云端以删除无效数据..."):
+                        new_jgy = JianGuoYunClient()
+                        jgy_login_res = new_jgy.login()
+                        if jgy_login_res["code"] == 200:
+                            jgy = new_jgy
+                            st.success("云端连接成功！")
+                        else:
+                            st.warning("云端连接失败！")
+                            st.write(jgy_login_res)
+                    if jgy is not None:
+                        with st.spinner("尝试删除云端无效数据..."):
+                            delete_user_config_res = jgy.delete(str(phoneNumber))
+                            if delete_user_config_res and delete_user_config_res.get("code") == 200:
+                                st.success("删除云端无效数据成功！")
+                            else:
+                                st.warning("删除云端无效数据失败！")
+                                st.write(delete_user_config_res)
                 else:
                     st.success("用户身份验证成功！")
                     user_config_success = True
                     user_effective = True
+            if not user_effective:
+                refreshPage()
+
+    # 本地配置不存在或者失效
     if not user_config_success:
         csr_uuid = str(uuid.uuid4())
         headers["csr_uuid"] = csr_uuid
         with st.form(key="phoneNumber_form"):
             phoneNumber = st.text_input(label="请输入手机号码：", key="phoneNumber_input")
             if st.form_submit_button("确定"):
+
+                data_from_cloud = False
+                jgy = None
+                with st.spinner("尝试连接云端..."):
+                    new_jgy = JianGuoYunClient()
+                    jgy_login_res = new_jgy.login()
+                    if jgy_login_res["code"] == 200:
+                        jgy = new_jgy
+                        st.success("云端连接成功！")
+                    else:
+                        st.warning("云端连接失败！")
+                        st.write(jgy_login_res)
+                if jgy is not None:
+                    with st.spinner("尝试从云端获取数据..."):
+                        cloud_user_config_res = jgy.get(str(phoneNumber))
+                        if cloud_user_config_res and cloud_user_config_res.get("code") == 200:
+                            user_config = json.loads(base64.b64decode(cloud_user_config_res["value"]).decode())
+                            JSCookieManager(key="user_config", value=json.dumps(user_config))
+                            st.success("云端数据获取成功！")
+                            data_from_cloud = True
+                if data_from_cloud:
+                    refreshPage()
+
                 getCsrf_success = False
                 with st.spinner("正在获取 CSRF 参数..."):
                     getCsrf_res = getCsrf()
@@ -323,6 +373,8 @@ if user_config_res:
                             JSCookieManager(key="user_config", value=json.dumps(user_config))
                     if getCaptcha_success:
                         refreshPage()
+
+    # 本地配置存在但未登录成功
     if user_config_success and not user_effective:
         with st.form(key="captcha_form"):
             show_phoneNumber = st.text_input(label="手机号码：", key="show_phoneNumber", disabled=True, value=phoneNumber)
@@ -358,22 +410,44 @@ if user_config_res:
             if change:
                 JSCookieManager(key="user_config", delete=True)
                 refreshPage()
-    # 必须登录成功才能执行以下操作
+
+    # 登录成功
     if user_effective:
         with st.form("execute_form"):
             show_phoneNumber = st.text_input(label="手机号码：", key="show_phoneNumber", disabled=True, value=phoneNumber)
-            change = st.form_submit_button("更改手机号码")
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                execute_submit = st.form_submit_button("一键执行")
+            with col2:
+                upload_submit = st.form_submit_button("上传云端")
+            with col3:
+                change = st.form_submit_button("更换账号")
+
+            if upload_submit:
+                jgy = None
+                with st.spinner("尝试连接云端..."):
+                    new_jgy = JianGuoYunClient()
+                    jgy_login_res = new_jgy.login()
+                    if jgy_login_res["code"] == 200:
+                        jgy = new_jgy
+                        st.success("云端连接成功！")
+                    else:
+                        st.warning("云端连接失败！")
+                        st.write(jgy_login_res)
+                if jgy is not None:
+                    with st.spinner("正在上传数据..."):
+                        upload_res = jgy.set(param=str(phoneNumber), value=json.dumps(user_config))
+                        if upload_res["code"] == 200:
+                            st.success("数据上传成功！")
+                        else:
+                            st.warning("数据上传失败！")
+                            st.write(upload_res)
+
             if change:
                 JSCookieManager(key="user_config", delete=True)
                 refreshPage()
-            execute_submit = False
-            with st.spinner("准备自动执行..."):
-                waits = 0
-                for i in range(2):
-                    time.sleep(1)
-                    waits += 1
-                if waits >= 2:
-                    execute_submit = True
+
             if execute_submit:
                 # ***** 投票 ***** #
                 getVoteList_success = False
