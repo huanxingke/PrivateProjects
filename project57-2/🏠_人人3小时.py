@@ -320,7 +320,6 @@ if user_config_res:
         with st.form(key="phoneNumber_form"):
             phoneNumber = st.text_input(label="请输入手机号码：", key="phoneNumber_input")
             if st.form_submit_button("确定"):
-
                 data_from_cloud = False
                 jgy = None
                 with st.spinner("尝试连接云端..."):
@@ -342,37 +341,37 @@ if user_config_res:
                             data_from_cloud = True
                 if data_from_cloud:
                     refreshPage()
-
-                getCsrf_success = False
-                with st.spinner("正在获取 CSRF 参数..."):
-                    getCsrf_res = getCsrf()
-                    if getCsrf_res["code"] == 200:
-                        p_csrf = getCsrf_res["p_csrf"]
-                        getCsrf_success = True
-                        st.success("获取 CSRF 参数成功！")
-                    else:
-                        st.warning("获取 CSRF 参数失败！")
-                        st.write(getCsrf_success)
-                if getCsrf_success:
-                    getCaptcha_success = False
-                    with st.spinner("正在获取验证码..."):
-                        sendCaptcha_res = sendCaptcha()
-                        if sendCaptcha_res["code"] != 200:
-                            st.warning("获取验证码失败！")
-                            st.write(sendCaptcha_res)
+                else:
+                    getCsrf_success = False
+                    with st.spinner("正在获取 CSRF 参数..."):
+                        getCsrf_res = getCsrf()
+                        if getCsrf_res["code"] == 200:
+                            p_csrf = getCsrf_res["p_csrf"]
+                            getCsrf_success = True
+                            st.success("获取 CSRF 参数成功！")
                         else:
-                            getCaptcha_success = True
-                            st.success("获取验证码成功！")
-                            user_config = {
-                                "csr_uuid": csr_uuid,
-                                "p_csrf": p_csrf,
-                                "phoneNumber": phoneNumber,
-                                "timestamp": time.time(),
-                                "status": 0
-                            }
-                            JSCookieManager(key="user_config", value=json.dumps(user_config))
-                    if getCaptcha_success:
-                        refreshPage()
+                            st.warning("获取 CSRF 参数失败！")
+                            st.write(getCsrf_success)
+                    if getCsrf_success:
+                        getCaptcha_success = False
+                        with st.spinner("正在获取验证码..."):
+                            sendCaptcha_res = sendCaptcha()
+                            if sendCaptcha_res["code"] != 200:
+                                st.warning("获取验证码失败！")
+                                st.write(sendCaptcha_res)
+                            else:
+                                getCaptcha_success = True
+                                st.success("获取验证码成功！")
+                                user_config = {
+                                    "csr_uuid": csr_uuid,
+                                    "p_csrf": p_csrf,
+                                    "phoneNumber": phoneNumber,
+                                    "timestamp": time.time(),
+                                    "status": 0
+                                }
+                                JSCookieManager(key="user_config", value=json.dumps(user_config))
+                        if getCaptcha_success:
+                            refreshPage()
 
     # 本地配置存在但未登录成功
     if user_config_success and not user_effective:
