@@ -415,13 +415,15 @@ if user_config_res:
         with st.form("execute_form"):
             show_phoneNumber = st.text_input(label="手机号码：", key="show_phoneNumber", disabled=True, value=phoneNumber)
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 execute_submit = st.form_submit_button("一键执行")
             with col2:
-                upload_submit = st.form_submit_button("上传云端")
-            with col3:
                 change = st.form_submit_button("更换账号")
+            with col3:
+                upload_submit = st.form_submit_button("上传至云端")
+            with col4:
+                delete_from_cloud = st.form_submit_button("从云端删除")
 
             if upload_submit:
                 jgy = None
@@ -442,6 +444,28 @@ if user_config_res:
                         else:
                             st.warning("数据上传失败！")
                             st.write(upload_res)
+
+            if delete_from_cloud:
+                jgy = None
+                with st.spinner("尝试连接云端..."):
+                    new_jgy = JianGuoYunClient()
+                    jgy_login_res = new_jgy.login()
+                    if jgy_login_res["code"] == 200:
+                        jgy = new_jgy
+                        st.success("云端连接成功！")
+                    else:
+                        st.warning("云端连接失败！")
+                        st.write(jgy_login_res)
+                if jgy is not None:
+                    with st.spinner("正在删除云端数据..."):
+                        delete_user_config_res = jgy.delete(str(phoneNumber))
+                        if delete_user_config_res and delete_user_config_res.get("code") == 200:
+                            JSCookieManager(key="user_config", delete=True)
+                            st.success("删除云端数据成功！")
+                            refreshPage()
+                        else:
+                            st.warning("删除云端数据失败！")
+                            st.write(delete_user_config_res)
 
             if change:
                 JSCookieManager(key="user_config", delete=True)
