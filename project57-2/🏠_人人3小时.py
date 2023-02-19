@@ -322,7 +322,7 @@ if user_config_res:
             if st.form_submit_button("确定"):
                 data_from_cloud = False
                 jgy = None
-                with st.spinner("尝试连接云端..."):
+                with st.spinner("尝试连接云端以获取数据..."):
                     new_jgy = JianGuoYunClient()
                     jgy_login_res = new_jgy.login()
                     if jgy_login_res["code"] == 200:
