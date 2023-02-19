@@ -25,7 +25,6 @@ class JianGuoYunClient(object):
         self.username = "295065586@qq.com"
         self.password = "a2id89w95y95me86"
         self.client = None
-        self.login()
 
     @Validation
     def login(self):
