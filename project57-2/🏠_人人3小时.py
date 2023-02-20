@@ -413,6 +413,8 @@ if user_config_res:
     # 登录成功
     if user_effective:
         with st.form("execute_form"):
+            st.info("数据上传云端后将在每天 06:00 自动执行！")
+
             show_phoneNumber = st.text_input(label="手机号码：", key="show_phoneNumber", disabled=True, value=phoneNumber)
 
             col1, col2, col3, col4 = st.columns(4)
