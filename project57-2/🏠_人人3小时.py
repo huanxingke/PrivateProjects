@@ -232,22 +232,24 @@ def donateSteps(superTeamId=4590, dsSteps=5000):
 
 @ErrorCatcher
 def getUser():
-    url = "https://m.3hours.taobao.com/user/userIndex"
-    get_user_headers = {
-        "Host": "m.3hours.taobao.com",
-        "csr-token": csr_token,
-        "csr-uuid": csr_uuid,
-        "csr-account-v2": "true",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36",
-        "Content-Type": "application/json;charset=UTF-8",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
-        "csr-front-v": "1.1.0",
-        "Origin": "https://3hours.taobao.com",
-        "Referer": "https://3hours.taobao.com/"
+    url = "https://3hours.taobao.com/user/v2/list"
+    jar_cookies = requests.utils.cookiejar_from_dict(cookie)
+    response = requests.get(url=url, headers=headers, cookies=jar_cookies).json()
+    return response
+
+
+@ErrorCatcher
+def setCurrentUser(userId):
+    url = "https://3hours.taobao.com/user/v2/setCurrentUser?p_csrf=ea70c1c8bdd4493d8f9a8411a750fc15&threehours-from-channel="
+    params = {
+        "p_csrf": p_csrf
+    }
+    data = {
+        "userId": userId
     }
     jar_cookies = requests.utils.cookiejar_from_dict(cookie)
-    response = requests.get(url=url, headers=get_user_headers, cookies=jar_cookies).json()
-    return response
+    response = requests.post(url=url, params=params, json=data, headers=headers, cookies=jar_cookies)
+    return {"code": 200, "set_response": response}
 
 
 # 页面基本配置
@@ -307,7 +309,6 @@ if user_config_res:
                                 st.warning("删除云端无效数据失败！")
                                 st.write(delete_user_config_res)
                 else:
-                    st.success("用户身份验证成功！")
                     user_config_success = True
                     user_effective = True
             if not user_effective:
@@ -412,19 +413,83 @@ if user_config_res:
 
     # 登录成功
     if user_effective:
-        st.info("可以选择将数据上传云端，每天 06:00 自动执行！")
+        st.info("可以将数据上传云端，每天 06:00 自动执行！")
         with st.form("execute_form"):
             show_phoneNumber = st.text_input(label="手机号码：", key="show_phoneNumber", disabled=True, value=phoneNumber)
 
-            col1, col2, col3, col4 = st.columns(4)
+            account_index = st.radio(
+                "账号一览",
+                [f"[{i_index+1}] {i['nick']}" if not i["current"] else f"[{i_index+1}] {i['nick']}（当前账号）"
+                 for i_index, i in enumerate(getUser_res["data"])],
+                index=0 if not [i_index for i_index, i in enumerate(getUser_res["data"]) if not i["current"]] else [i_index for i_index, i in enumerate(getUser_res["data"]) if not i["current"]][0],
+                horizontal=False
+            )
+
+            col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
                 execute_submit = st.form_submit_button("一键执行")
             with col2:
                 change = st.form_submit_button("更换账号")
             with col3:
-                upload_submit = st.form_submit_button("上传至云端")
+                exchange = st.form_submit_button("切换小号")
             with col4:
+                upload_submit = st.form_submit_button("上传至云端")
+            with col5:
                 delete_from_cloud = st.form_submit_button("从云端删除")
+
+            if exchange:
+                account_index = int(re.compile(r"\[(.*?)\] .*").findall(account_index)[0]) - 1
+                exchange_user = getUser_res["data"][account_index]
+                if exchange_user["current"]:
+                    st.warning("您所选择的账号为当前账号！")
+                else:
+                    exchange_success = False
+                    with st.spinner("正在切换小号..."):
+                        del headers["csr-csrf"]
+                        exchange_res = setCurrentUser(userId=exchange_user["userId"])
+                        if exchange_res["code"] != 200:
+                            st.warning("切换小号失败！")
+                            st.write(exchange_res)
+                        else:
+                            exchange_res = exchange_res["set_response"]
+                            exchange_json = exchange_res.json()
+                            if exchange_json["code"] != 200:
+                                st.warning("切换小号失败！")
+                                st.write(exchange_json)
+                            else:
+                                exchange_success = True
+                                st.success("切换小号成功！")
+                    if exchange_success:
+                        jgy = None
+                        with st.spinner("尝试连接云端以更新数据..."):
+                            new_jgy = JianGuoYunClient()
+                            jgy_login_res = new_jgy.login()
+                            if jgy_login_res["code"] == 200:
+                                jgy = new_jgy
+                                st.success("云端连接成功！")
+                            else:
+                                st.warning("云端连接失败！")
+                                st.write(jgy_login_res)
+                        if jgy is not None:
+                            update = False
+                            with st.spinner("正在更新数据..."):
+                                sid = exchange_json["data"]["sid"]
+                                token = exchange_json["data"]["token"]
+                                cookie = exchange_res.cookies.get_dict()
+                                user_config["csr_token"] = sid
+                                user_config["csr_csrf"] = token
+                                user_config["p_csrf"] = token
+                                user_config["cookie"] = cookie
+                                upload_res = jgy.set(param=str(phoneNumber), value=json.dumps(user_config))
+                                if upload_res["code"] == 200:
+                                    JSCookieManager(key="user_config", value=json.dumps(user_config))
+                                    st.success("数据更新成功！")
+                                    update = True
+                                else:
+                                    st.warning("数据更新失败！")
+                                    st.write(upload_res)
+                            if update:
+                                refreshPage()
 
             if upload_submit:
                 jgy = None
