@@ -418,24 +418,60 @@ if user_config_res:
             show_phoneNumber = st.text_input(label="手机号码：", key="show_phoneNumber", disabled=True, value=phoneNumber)
 
             account_index = st.radio(
-                "账号一览",
+                "◆ 账号一览",
                 [f"[{i_index+1}] {i['nick']}" if not i["current"] else f"[{i_index+1}] {i['nick']}（当前账号）"
                  for i_index, i in enumerate(getUser_res["data"])],
                 index=0 if not [i_index for i_index, i in enumerate(getUser_res["data"]) if not i["current"]] else [i_index for i_index, i in enumerate(getUser_res["data"]) if not i["current"]][0],
                 horizontal=False
             )
 
-            col1, col2, col3, col4, col5 = st.columns(5)
-            with col1:
-                execute_submit = st.form_submit_button("一键执行")
-            with col2:
-                change = st.form_submit_button("更换账号")
-            with col3:
-                exchange = st.form_submit_button("切换小号")
-            with col4:
-                upload_submit = st.form_submit_button("上传至云端")
-            with col5:
-                delete_from_cloud = st.form_submit_button("从云端删除")
+            sms_status = 1 if user_config.get("sms") else 0
+            sms_index = st.radio(
+                "◆ 短信通知开关",
+                [
+                    "关（当前选项）" if not sms_status else "关",
+                    "开（当前选项）" if sms_status else "开"
+                ],
+                index=0 if sms_status == 1 else 1,
+                horizontal=False
+            )
+
+            execute_submit = st.form_submit_button("【1】一键执行")
+            change = st.form_submit_button("【2】更换账号")
+            exchange = st.form_submit_button("【3】切换小号")
+            change_sms = st.form_submit_button("【4】短信开关")
+            upload_submit = st.form_submit_button("【5】上传至云端")
+            delete_from_cloud = st.form_submit_button("【6】从云端删除")
+
+            if change_sms:
+                sms_index = 1 if sms_index[0] == "开" else 0
+                if sms_index == sms_status:
+                    st.warning("无需更改！")
+                else:
+                    jgy = None
+                    with st.spinner("尝试连接云端以更新数据..."):
+                        new_jgy = JianGuoYunClient()
+                        jgy_login_res = new_jgy.login()
+                        if jgy_login_res["code"] == 200:
+                            jgy = new_jgy
+                            st.success("云端连接成功！")
+                        else:
+                            st.warning("云端连接失败！")
+                            st.write(jgy_login_res)
+                    if jgy is not None:
+                        update = False
+                        with st.spinner("正在更新数据..."):
+                            user_config["sms"] = True if sms_index == 1 else False
+                            upload_res = jgy.set(param=str(phoneNumber), value=json.dumps(user_config))
+                            if upload_res["code"] == 200:
+                                JSCookieManager(key="user_config", value=json.dumps(user_config))
+                                st.success("数据更新成功！")
+                                update = True
+                            else:
+                                st.warning("数据更新失败！")
+                                st.write(upload_res)
+                        if update:
+                            refreshPage()
 
             if exchange:
                 account_index = int(re.compile(r"\[(.*?)\] .*").findall(account_index)[0]) - 1
