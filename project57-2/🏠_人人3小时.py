@@ -240,9 +240,10 @@ def getUser():
 
 @ErrorCatcher
 def setCurrentUser(userId):
-    url = "https://3hours.taobao.com/user/v2/setCurrentUser?p_csrf=ea70c1c8bdd4493d8f9a8411a750fc15&threehours-from-channel="
+    url = "https://3hours.taobao.com/user/v2/setCurrentUser"
     params = {
-        "p_csrf": p_csrf
+        "p_csrf": p_csrf,
+        "threehours-from-channel": ""
     }
     data = {
         "userId": userId
